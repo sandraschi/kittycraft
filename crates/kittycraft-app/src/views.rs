@@ -1,12 +1,36 @@
 use crate::theme::{build_cat_portrait, card_frame, hero_header, palette, pill_badge};
-use egui::{RichText, ScrollArea, TextureHandle, TextureOptions, Ui};
+use egui::{ColorImage, RichText, ScrollArea, TextureHandle, TextureOptions, Ui};
 use kittycraft_core::catalog::{
     cat_human_age, check_toxin, food_ration_grams, match_breeds, CatMatchQuery, CAT_BREEDS,
     CAT_INSURANCES, VET_HOSPITALS,
 };
 use kittycraft_core::store::KittyStore;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
+
+fn load_breed_photo(breed_id: &str, suffix: &str) -> Option<ColorImage> {
+    let fname = format!("{breed_id}_{suffix}.jpg");
+    let mut candidates = vec![
+        PathBuf::from("assets/breeds").join(&fname),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/breeds")
+            .join(&fname),
+    ];
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("assets/breeds").join(&fname));
+        }
+    }
+    for path in candidates {
+        if let Ok(img) = image::open(&path) {
+            let rgba = img.to_rgba8();
+            let size = [rgba.width() as usize, rgba.height() as usize];
+            return Some(ColorImage::from_rgba_unmultiplied(size, rgba.as_raw()));
+        }
+    }
+    None
+}
 
 pub struct ViewsState {
     pub match_q: CatMatchQuery,
@@ -189,8 +213,10 @@ pub fn ui_encyclopedia(ui: &mut Ui, st: &mut ViewsState) {
                 .portrait_cache
                 .entry(b.id.to_string())
                 .or_insert_with(|| {
-                    let kit = build_cat_portrait(b, true);
-                    let adu = build_cat_portrait(b, false);
+                    let kit = load_breed_photo(b.id, "kitten")
+                        .unwrap_or_else(|| build_cat_portrait(b, true));
+                    let adu = load_breed_photo(b.id, "adult")
+                        .unwrap_or_else(|| build_cat_portrait(b, false));
                     let tk = cols[1].ctx().load_texture(
                         format!("kitty_{}_k", b.id),
                         kit,
